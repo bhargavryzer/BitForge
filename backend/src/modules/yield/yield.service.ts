@@ -1,28 +1,42 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpStatus, LoggerService as NestLoggerService } from '@nestjs/common';
 import { StarknetService } from '../../services/starknet.service';
 import { DepositDto } from '../../dto/deposit.dto';
+import { CustomLoggerService } from '../../logger/logger.service';
 import { WithdrawDto } from '../../dto/withdraw.dto';
+import { PreparedTransaction } from '../../interfaces/starknet.interface';
+import { ApiException } from '../../exceptions/api.exception';
 
 @Injectable()
 export class YieldService {
-  constructor(private readonly starknetService: StarknetService) {}
+  private readonly logger: CustomLoggerService;
+
+  constructor(
+    private readonly starknetService: StarknetService,
+    logger: CustomLoggerService, // Injected logger
+  ) {
+    this.logger = logger.setContext(YieldService.name);
+    this.logger.log('YieldService instantiated');
+  }
 
   async getCurrentApy() {
+    this.logger.debug('Attempting to get current APY.');
     try {
-      // Get APY from each strategy
+      this.logger.debug('Fetching individual strategy APYs from StarknetService.');
       const vesuApy = await this.starknetService.getVesuApy();
       const babylonApy = await this.starknetService.getBabylonApy();
       const ekuboApy = await this.starknetService.getEkuboApy();
+      this.logger.debug('Individual strategy APYs fetched.', { vesuApy, babylonApy, ekuboApy });
+
+      this.logger.debug('Fetching current allocation.');
+      const allocation = await this.getCurrentAllocation(); // Already logs internally
+      this.logger.debug('Current allocation fetched.', { allocation });
       
-      // Get current allocation
-      const allocation = await this.getCurrentAllocation();
-      
-      // Calculate weighted average APY
-      const totalApy = (
-        (vesuApy * allocation.vesu / 100) +
-        (babylonApy * allocation.babylon / 100) +
-        (ekuboApy * allocation.ekubo / 100)
-      );
+      const vesuWeight = typeof allocation.vesu === 'number' ? allocation.vesu / 100 : 0;
+      const babylonWeight = typeof allocation.babylon === 'number' ? allocation.babylon / 100 : 0;
+      const ekuboWeight = typeof allocation.ekubo === 'number' ? allocation.ekubo / 100 : 0;
+
+      const totalApy = (vesuApy * vesuWeight) + (babylonApy * babylonWeight) + (ekuboApy * ekuboWeight);
+      this.logger.log('Current APY calculated successfully.', { totalApy, strategies: { vesu: vesuApy, babylon: babylonApy, ekubo: ekuboApy } });
       
       return {
         total: totalApy,
@@ -33,122 +47,135 @@ export class YieldService {
         },
       };
     } catch (error) {
-      console.error('Error getting APY:', error);
-      throw new Error('Failed to get current APY');
+      this.logger.error(`Error calculating current APY in YieldService: ${error.message}`, error.stack);
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException('Failed to calculate current APY.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_APY_CALCULATION_ERROR');
     }
   }
 
   async getCurrentAllocation() {
+    this.logger.debug('Attempting to get current allocation from StarknetService.');
     try {
       const allocation = await this.starknetService.getAllocation();
-      
-      return {
-        vesu: allocation[0] / 100, // Convert basis points to percentage
+      const currentAllocation = {
+        vesu: allocation[0] / 100,
         babylon: allocation[1] / 100,
         ekubo: allocation[2] / 100,
       };
+      this.logger.debug('Current allocation processed.', { currentAllocation });
+      return currentAllocation;
     } catch (error) {
-      console.error('Error getting allocation:', error);
-      throw new Error('Failed to get current allocation');
+      this.logger.error(`Error getting current allocation in YieldService: ${error.message}`, error.stack);
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException('Failed to get current allocation.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_ALLOCATION_ERROR');
     }
   }
 
   async getUserBalance(address: string) {
+    this.logger.debug(`Attempting to get user balance for address: ${address}`);
     try {
       const balance = await this.starknetService.getUserBalance(address);
-      
-      return {
+      const userBalance = {
         address,
         balance: balance.toString(),
         balanceFormatted: this.formatBtcAmount(balance),
       };
+      this.logger.debug(`User balance for ${address} processed.`, { userBalance });
+      return userBalance;
     } catch (error) {
-      console.error('Error getting user balance:', error);
-      throw new Error('Failed to get user balance');
+      this.logger.error(`Error getting user balance for ${address} in YieldService: ${error.message}`, error.stack);
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException(`Failed to get user balance for ${address}.`, HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_USER_BALANCE_ERROR');
     }
   }
 
   async getTotalDeposits() {
+    this.logger.debug('Attempting to get total deposits from StarknetService.');
     try {
       const totalDeposits = await this.starknetService.getTotalDeposits();
-      
-      return {
+      const result = {
         total: totalDeposits.toString(),
         totalFormatted: this.formatBtcAmount(totalDeposits),
       };
+      this.logger.debug('Total deposits processed.', { result });
+      return result;
     } catch (error) {
-      console.error('Error getting total deposits:', error);
-      throw new Error('Failed to get total deposits');
+      this.logger.error(`Error getting total deposits in YieldService: ${error.message}`, error.stack);
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException('Failed to get total deposits.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_TOTAL_DEPOSITS_ERROR');
     }
   }
 
-  async deposit(depositDto: DepositDto) {
+  async deposit(depositDto: DepositDto): Promise<PreparedTransaction> {
+    this.logger.log('Attempting to prepare deposit transaction.', { address: depositDto.address, amount: depositDto.amount });
     try {
       const { address, amount } = depositDto;
-      
-      // Convert amount to wei (satoshis for BTC)
       const amountInWei = BigInt(amount) * BigInt(10 ** 8);
-      
-      // Call deposit function on BitForge contract
-      const txHash = await this.starknetService.deposit(address, amountInWei);
-      
-      return {
-        success: true,
-        txHash,
-        address,
-        amount,
-      };
+      this.logger.debug('Calling StarknetService for deposit preparation.', { address, amountInWei: amountInWei.toString() });
+      const preparedTx = await this.starknetService.deposit(address, amountInWei);
+      this.logger.log('Deposit transaction prepared successfully.', { preparedTx });
+      return preparedTx;
     } catch (error) {
-      console.error('Error depositing:', error);
-      throw new Error('Failed to deposit');
+      this.logger.error(`Error preparing deposit in YieldService: ${error.message}`, error.stack, { depositDto });
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException('Failed to prepare deposit transaction.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_DEPOSIT_PREPARATION_ERROR');
     }
   }
 
-  async withdraw(withdrawDto: WithdrawDto) {
+  async withdraw(withdrawDto: WithdrawDto): Promise<PreparedTransaction> {
+    this.logger.log('Attempting to prepare withdraw transaction.', { address: withdrawDto.address, amount: withdrawDto.amount });
     try {
       const { address, amount } = withdrawDto;
-      
-      // Convert amount to wei (satoshis for BTC)
       const amountInWei = BigInt(amount) * BigInt(10 ** 8);
-      
-      // Call withdraw function on BitForge contract
-      const txHash = await this.starknetService.withdraw(address, amountInWei);
-      
-      return {
-        success: true,
-        txHash,
-        address,
-        amount,
-      };
+      this.logger.debug('Calling StarknetService for withdraw preparation.', { address, amountInWei: amountInWei.toString() });
+      const preparedTx = await this.starknetService.withdraw(address, amountInWei);
+      this.logger.log('Withdraw transaction prepared successfully.', { preparedTx });
+      return preparedTx;
     } catch (error) {
-      console.error('Error withdrawing:', error);
-      throw new Error('Failed to withdraw');
+      this.logger.error(`Error preparing withdraw in YieldService: ${error.message}`, error.stack, { withdrawDto });
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException('Failed to prepare withdraw transaction.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_WITHDRAW_PREPARATION_ERROR');
     }
   }
 
   async rebalance() {
+    this.logger.log('Attempting to trigger rebalance.');
     try {
-      // Call rebalance function on BitForge contract
+      this.logger.debug('Calling StarknetService to execute rebalance.');
       const txHash = await this.starknetService.rebalance();
-      
-      // Get new allocation after rebalance
+      this.logger.debug('Rebalance transaction hash received.', { txHash });
+      this.logger.debug('Fetching new allocation post-rebalance.');
       const newAllocation = await this.getCurrentAllocation();
-      
+      this.logger.log('Rebalance process completed successfully.', { txHash, newAllocation });
       return {
         success: true,
         txHash,
         allocation: newAllocation,
       };
     } catch (error) {
-      console.error('Error rebalancing:', error);
-      throw new Error('Failed to rebalance');
+      this.logger.error(`Error during rebalance in YieldService: ${error.message}`, error.stack);
+      if (error instanceof ApiException) {
+        throw error;
+      }
+      throw new ApiException('Failed to rebalance.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_REBALANCE_ERROR');
     }
   }
 
   async getYieldHistory(address?: string, days: number = 30) {
+    this.logger.debug(`Getting yield history for address: ${address || 'platform'}, days: ${days}`);
     try {
-      // In a real implementation, this would fetch historical yield data from a database
-      // For simplicity, returning mock data
       const today = new Date();
       const history = [];
       
@@ -171,8 +198,8 @@ export class YieldService {
         history,
       };
     } catch (error) {
-      console.error('Error getting yield history:', error);
-      throw new Error('Failed to get yield history');
+      this.logger.error(`Error getting yield history (mock data): ${error.message}`, error.stack, { address, days });
+      throw new ApiException('Failed to get yield history.', HttpStatus.INTERNAL_SERVER_ERROR, 'YIELD_HISTORY_ERROR');
     }
   }
 

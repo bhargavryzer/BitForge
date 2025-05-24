@@ -1,8 +1,9 @@
 import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger'; // Added ApiResponse
 import { YieldService } from './yield.service';
 import { DepositDto } from '../../dto/deposit.dto';
 import { WithdrawDto } from '../../dto/withdraw.dto';
+import { PreparedTransaction } from '../../interfaces/starknet.interface'; // Added import
 
 @ApiTags('yield')
 @Controller('yield')
@@ -35,14 +36,16 @@ export class YieldController {
   }
 
   @Post('deposit')
-  @ApiOperation({ summary: 'Deposit BTC into the platform' })
-  async deposit(@Body() depositDto: DepositDto) {
+  @ApiOperation({ summary: 'Prepare a deposit transaction for frontend signing' }) // Summary updated
+  @ApiResponse({ status: 201, description: 'Transaction prepared successfully.', type: PreparedTransaction }) // ApiResponse updated
+  async deposit(@Body() depositDto: DepositDto): Promise<PreparedTransaction> { // Signature updated
     return this.yieldService.deposit(depositDto);
   }
 
   @Post('withdraw')
-  @ApiOperation({ summary: 'Withdraw BTC from the platform' })
-  async withdraw(@Body() withdrawDto: WithdrawDto) {
+  @ApiOperation({ summary: 'Prepare a withdraw transaction for frontend signing' }) // Summary updated
+  @ApiResponse({ status: 201, description: 'Transaction prepared successfully.', type: PreparedTransaction }) // ApiResponse updated
+  async withdraw(@Body() withdrawDto: WithdrawDto): Promise<PreparedTransaction> { // Signature updated
     return this.yieldService.withdraw(withdrawDto);
   }
 

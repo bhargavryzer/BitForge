@@ -6,6 +6,7 @@ import { OracleModule } from './modules/oracle/oracle.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import configuration from './config/configuration';
+import { LoggerModule } from './logger/logger.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import configuration from './config/configuration';
       isGlobal: true,
       load: [configuration],
     }),
+    LoggerModule, // Added LoggerModule
     YieldModule,
     WalletModule,
     OracleModule,

@@ -86,3 +86,9 @@ export interface HistoricalPriceData {
     price: string;
   }>;
 }
+
+export interface PreparedTransaction {
+  contractAddress: string;
+  entrypoint: string;
+  calldata: string[]; // CallData.compile returns string[]
+}
