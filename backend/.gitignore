@@ -1,0 +1,45 @@
+# Node.js dependencies
+/node_modules/
+
+# Package manager
+.pnp/
+.pnp.js
+
+# Build output
+/dist/
+build/
+*.tsbuildinfo
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env*.local
+
+# Coverage and testing
+/coverage/
+jest.config.js
+
+# OS-specific files
+.DS_Store
+
+# SSL keys or other secrets
+*.pem
+
+# Editors/IDEs
+.idea/
+.vscode/
+
+# NestJS-specific
+nest-cli.json
+nest-env.d.ts
+
+# Vercel deployment
+.vercel/
+
+# Optional: ignore compiled Next.js output if integrating with Next.js
+.next/
+out/

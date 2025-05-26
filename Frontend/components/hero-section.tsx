@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 import { useInView } from "react-intersection-observer"
-import { ArrowRight, Bitcoin } from "lucide-react"
+import { ArrowDown, Bitcoin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { fadeIn, staggerContainer } from "@/lib/animations"
 
@@ -88,7 +88,7 @@ export function HeroSection() {
             className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-orange-600 to-amber-400 leading-tight"
           >
             Unlock <span className="relative">
-              <span className="relative z-10">
+              <span className="relative z-10 text-primary">
                 {count}%
               </span>
               <span className="absolute bottom-1 left-0 h-3 w-full bg-amber-500/20 -z-10 rounded-full"></span>
@@ -112,7 +112,7 @@ export function HeroSection() {
               whileTap={{ scale: 0.95 }}
             >
               <Button size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white min-w-[180px] shadow-lg shadow-amber-500/20">
-                Join Waitlist
+                Launch App
               </Button>
             </motion.div>
             <motion.div
@@ -120,7 +120,7 @@ export function HeroSection() {
               whileTap={{ scale: 0.95 }}
             >
               <Button variant="outline" size="lg" className="min-w-[180px]">
-                Learn More <ArrowRight className="ml-2 h-4 w-4" />
+                White Paper <ArrowDown className="ml-2 h-4 w-4" />
               </Button>
             </motion.div>
           </motion.div>
